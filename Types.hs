@@ -1,4 +1,12 @@
-module Types where
+module Types ( Net
+             , Bot(Bot, socket, starttime)
+	     , IRCMessage(IRCMessage, fullText, command, responseNum, channel, user, semiText)
+	     , IRCCommandName
+	     , IRCCommandFunction
+	     , IRCCommandDescription
+	     , IRCCommand(IRCCommand, commandName, commandFunction, commandDescription)
+             )
+	     where
 
 import Control.Monad.Reader
 import System.Time
@@ -16,7 +24,8 @@ data IRCMessage = IRCMessage { fullText :: String
                              , channel :: String
                              , user :: String
                              , semiText :: String
-                             } deriving (Show)
+                             } 
+			     deriving (Show)
 
 type IRCCommandName = String
 type IRCCommandFunction = IRCMessage -> Net ()

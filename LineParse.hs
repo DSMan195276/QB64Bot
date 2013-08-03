@@ -1,4 +1,4 @@
-module LineParse where
+module LineParse ( lineParse ) where
 
 import IrcBot
 import Types

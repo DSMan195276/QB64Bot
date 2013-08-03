@@ -1,4 +1,4 @@
-module Cmds where
+module Cmds ( cmdList ) where
 
 import Types
 import IrcBot

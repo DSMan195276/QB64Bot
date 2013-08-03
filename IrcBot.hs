@@ -1,4 +1,13 @@
-module IrcBot where
+module IrcBot ( server
+              , port
+	      , chan
+	      , nick
+	      , topic
+	      , owners
+	      , privmsg
+	      , write
+              )
+              where
 
 import Types
 
