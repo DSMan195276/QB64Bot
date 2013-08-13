@@ -6,56 +6,48 @@ import Cmds
 
 import Data.List
 import System.Time
-import Data.IORef
+import Control.Concurrent.MVar
 import Data.List.Split
 import Control.Monad.Reader
 
-
 lineParse :: String -> Net ()
-lineParse s = do
-     if ping s 
-       then pong s 
-       else if topicChange s
-         then liftIO $ topicSet s
-         else do 
-	   let test = (getIRCMessage s) --return () --eval (clean s) (getChan s) (getUser s)
-	   liftIO $ putStrLn (show test)
-	   eval test
+lineParse s 
+    | ("PING :" `isPrefixOf` s)      = write "PONG" (':' : drop 6 s)
+    | (rnum == "332")                  = liftIO (takeMVar topic) >> liftIO (putMVar topic (splitOn " | " ((drop 1 . dropWhile (/= ':') . drop 1) s)))
+    | otherwise                      = do
+                                  let msg = (getIRCMessage s)
+                                  liftIO $ putStrLn (show msg)
+                                  eval msg
   where
-    clean         = drop 1 . dropWhile (/= ':') . drop 1
-    getChan a     = let ch = (takeWhile (/= ':') . drop 9 . dropWhile (/= ' ')) a
-                      in if (ch == nick)
-                           then (takeWhile (/= '!') . (drop 1)) a
-                           else ch
+    rnum = getResponseNum s
 
-    getUser       = takeWhile (/= '!') . drop 1
-    topicChange a = (getResponseNum a) == "332" 
-    topicSet    a = writeIORef topic (splitOn " | " ((drop 1 . dropWhile (/= ':') . drop 1) a))
-    ping x        = "PING :" `isPrefixOf` x
-    pong x        = write "PONG" (':' : drop 6 x)
-    
 getResponseNum :: String -> String
-getResponseNum = takeWhile (/= ' ') . drop 1 . dropWhile (/= ' ')
+getResponseNum s = (takeWhile (/= ' ') . drop 1 . dropWhile (/= ' ')) s
 
 
 getIRCMessage :: String -> IRCMessage
-getIRCMessage raw = getIRCMessage' raw (IRCMessage { fullText=raw, command="", responseNum="", channel="", user="", semiText="" })
+getIRCMessage raw = IRCMessage { fullText = raw, command = (readCommand raw), rightText = (readRight raw), channel = (readChannel raw), user = (readUser raw) , semiText = reverse (takeWhile (/= ':') (reverse raw)) }
+    where
+      readUser    r = if ((take 1 r) == ":")
+                        then (takeWhile (/= '!') . drop 1) r
+                        else ""
+      
+      readChannel r = if ((cm r) == nick)
+                        then readUser r
+                        else cm r
+        where cm r = (takeWhile (/= ' ') . drop 1 . dropWhile (/= ' ') . removeLeft) r
+      readCommand r = (takeWhile (/= ' ') . removeLeft) r
+      readRight   r = (drop 1 . dropWhile (/= ' ') . removeLeft) r
 
-getIRCMessage' :: String -> IRCMessage -> IRCMessage
-getIRCMessage' []        m = m
-getIRCMessage' (':':raw) m = if ((command m) == "")
-                               then getIRCMessage' (drop (length (getUser raw)) raw) (m { user = (getUser raw) } )
-                               else (m { semiText = raw })
-                           where
-                             getUser = takeWhile (/= '!')
-getIRCMessage' raw m = m
-
+      removeLeft  r = if ((take 1 r) == ":")
+                        then (drop 1 . dropWhile (/= ' ')) r
+                        else r
 
 eval :: IRCMessage -> Net ()
 eval m = eval' m cmdList
 
 eval' :: IRCMessage -> [IRCCommand] -> Net ()
-eval' _ []     = return ()
-eval' m@(IRCMessage { fullText=x }) ((IRCCommand { commandName = name, commandFunction = func}):cmds) = 
-                            if ((name) `isPrefixOf` x) then (func) m else eval' m cmds
+eval' _                             [] = return ()
+eval' m@(IRCMessage { semiText=x }) ((IRCCommand { name = nam, function = func}):cmds) = 
+                            if ((nam) `isPrefixOf` (drop 1 x)) then (func) m else eval' m cmds
 

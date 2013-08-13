@@ -52,3 +52,4 @@ run = do
     write "JOIN" chan
     privmsg "nickserv" ("identify " ++ pass)
     asks socket >>= listen
+

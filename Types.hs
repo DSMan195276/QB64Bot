@@ -1,12 +1,12 @@
 module Types ( Net
-             , Bot(Bot, socket, starttime)
-	     , IRCMessage(IRCMessage, fullText, command, responseNum, channel, user, semiText)
-	     , IRCCommandName
-	     , IRCCommandFunction
-	     , IRCCommandDescription
-	     , IRCCommand(IRCCommand, commandName, commandFunction, commandDescription)
+             , Bot(..)
+             , IRCMessage(..)
+             , IRCCommandName
+             , IRCCommandFunction
+             , IRCCommandDescription
+             , IRCCommand(..)
              )
-	     where
+             where
 
 import Control.Monad.Reader
 import System.Time
@@ -20,19 +20,19 @@ data Bot = Bot { socket :: Handle
 
 data IRCMessage = IRCMessage { fullText :: String
                              , command :: String
-                             , responseNum :: String
-                             , channel :: String
+                             , rightText :: String
                              , user :: String
+                             , channel :: String
                              , semiText :: String
-                             } 
-			     deriving (Show)
+                             }
+                             deriving (Show)
 
 type IRCCommandName = String
 type IRCCommandFunction = IRCMessage -> Net ()
 type IRCCommandDescription = String
 
-data IRCCommand = IRCCommand { commandName :: IRCCommandName
-                             , commandFunction :: IRCCommandFunction
-                             , commandDescription :: IRCCommandDescription
+data IRCCommand = IRCCommand { name :: IRCCommandName
+                             , function :: IRCCommandFunction
+                             , description :: IRCCommandDescription
                              }
 

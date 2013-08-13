@@ -1,11 +1,11 @@
 module IrcBot ( server
               , port
-	      , chan
-	      , nick
-	      , topic
-	      , owners
-	      , privmsg
-	      , write
+              , chan
+              , nick
+              , topic
+              , owners
+              , privmsg
+              , write
               )
               where
 
@@ -16,7 +16,7 @@ import Network
 import System.IO
 import System.Time
 import System.Exit
-import Data.IORef
+import Control.Concurrent.MVar
 import System.IO.Unsafe
 import Data.List.Split
 import Control.Monad.Reader
@@ -30,19 +30,20 @@ chan   = "#qb64"
 nick   = "QB64Bot2"
 
 
-topic :: IORef [String]
-topic = unsafePerformIO ( newIORef [""] )
+{-# NOINLINE topic #-}
+topic :: MVar [String]
+topic = unsafePerformIO (newMVar [""])
 
-owners :: IORef [String]
-owners = unsafePerformIO ( newIORef ["dsman195276"] )
+{-# NOINLINE owners #-}
+owners :: MVar [String]
+owners = unsafePerformIO (newMVar ["dsman195276"])
 
-
-privmsg :: String -> String -> Net ()
 privmsg c s = write "PRIVMSG" (c ++ " :" ++ s)
 
 write :: String -> String -> Net ()
-write s t = do
-    h <- asks socket
-    liftIO $ hPrintf h "%s %s\r\n" s t
-    liftIO $ printf    "> %s %s\n" s t
+write s t =
+    asks socket >>= \h ->
+    liftIO (hPrintf h "%s %s\r\n" s t) >>
+    liftIO (printf    "> %s %s\n" s t)
+
 

@@ -7,27 +7,31 @@ import Data.List
 import Network
 import System.Time
 import System.Exit
-import Data.IORef
 import Data.List.Split
+import Control.Concurrent.MVar
 import Control.Monad.Reader
 
-cmdList = [ IRCCommand { commandName="updatetopic",     commandFunction=cmdUpdateTopic,     commandDescription="Updates to topic to display the current Topic " ++ nick ++ " has (Must be Owner)" }
-          , IRCCommand { commandName="uptime",          commandFunction=cmdUpTime,          commandDescription="Displays " ++ nick ++ " current uptime" }
-          , IRCCommand { commandName="addtopic",        commandFunction=cmdAddTopic,        commandDescription="Adds any text after '!addtopic' as an entry onto the topic (Must be Owner)" }
-          , IRCCommand { commandName="deltopic",        commandFunction=cmdDelTopic,        commandDescription="Removes the left-most entry in the current Topic (Must be Owner)" }
-          , IRCCommand { commandName="echo",            commandFunction=cmdEcho,            commandDescription="Makes " ++ nick ++ " say any text after '!echo'" }
-          , IRCCommand { commandName="quit",            commandFunction=cmdQuit,            commandDescription="Make " ++ nick ++ " Exit the " ++ chan ++ " and quit (Must be Owner)" }
-          , IRCCommand { commandName="displayowners",   commandFunction=cmdDisplayOwners,   commandDescription="Show a list of all the owners" }
-          , IRCCommand { commandName="help",            commandFunction=cmdHelp,            commandDescription="Display usage and list of commands" }
+cmdList = [ IRCCommand { name="updatetopic",   function=cmdUpdateTopic,   description="Updates to topic to display the current Topic " ++ nick ++ " has (Must be Owner)" }
+          , IRCCommand { name="uptime",        function=cmdUpTime,        description="Displays " ++ nick ++ " current uptime" }
+          , IRCCommand { name="addtopic",      function=cmdAddTopic,      description="Adds any text after '!addtopic' as an entry onto the topic (Must be Owner)" }
+          , IRCCommand { name="deltopic",      function=cmdDelTopic,      description="Removes the left-most entry in the current Topic (Must be Owner)" }
+          , IRCCommand { name="echo",          function=cmdEcho,          description="Makes " ++ nick ++ " say any text after '!echo'" }
+          , IRCCommand { name="quit",          function=cmdQuit,          description="Make " ++ nick ++ " Exit the " ++ chan ++ " and quit (Must be Owner)" }
+          , IRCCommand { name="displayowners", function=cmdDisplayOwners, description="Show a list of all the owners" }
+          , IRCCommand { name="help",          function=cmdHelp,          description="Display usage and list of commands" }
           ]
 
 
 cmdUpdateTopic :: IRCMessage -> Net ()
 cmdUpdateTopic (IRCMessage { user = usr })= 
-    liftIO (usrIsOwner usr) >>= \isUser -> if isUser then updateTopic topic else return ()
+    liftIO (usrIsOwner usr) >>= \isUser -> 
+    if isUser
+      then updateTopic topic
+      else return ()
 
 cmdUpTime :: IRCMessage -> Net ()
-cmdUpTime (IRCMessage { channel = ch }) = uptime >>= privmsg (ch)
+cmdUpTime (IRCMessage { channel = ch }) =
+    uptime >>= privmsg (ch)
 
 cmdAddTopic :: IRCMessage -> Net ()
 cmdAddTopic (IRCMessage { fullText = x, user = usr }) = 
@@ -44,7 +48,8 @@ cmdDelTopic (IRCMessage { user = usr }) =
       else return ()
 
 cmdEcho :: IRCMessage -> Net ()
-cmdEcho (IRCMessage { fullText = x, channel = ch }) = privmsg (ch) (drop 6 x)
+cmdEcho (IRCMessage { semiText = x, channel = ch }) = 
+    privmsg (ch) (drop 6 x)
 
 cmdQuit :: IRCMessage -> Net ()
 cmdQuit (IRCMessage { user = usr }) = 
@@ -54,28 +59,28 @@ cmdQuit (IRCMessage { user = usr }) =
       else return ()
 
 cmdHelp :: IRCMessage -> Net ()
-cmdHelp (IRCMessage { fullText = x, user = usr }) = do
-    privmsg usr ("To use me, type one of the below commands as a message. Include any text after the command as nessisary")
-    displayOwners usr
+cmdHelp (IRCMessage { fullText = x, user = usr }) =
+    privmsg usr ("To use me, type one of the below commands as a message. Include any text after the command as nessisary") >>
+    displayOwners usr >>
     cmdHelp' usr cmdList
 
 cmdHelp' :: String -> [IRCCommand] -> Net ()
 cmdHelp' _ [] = return ()
 cmdHelp' usr (cmd:cmds) = privmsg usr (formatCmd cmd) >> cmdHelp' usr cmds
     where
-      formatCmd (IRCCommand { commandName = name, commandDescription = desc }) = (name) ++ " -- " ++ (desc)
+      formatCmd (IRCCommand { name = name, description = desc }) = (name) ++ " -- " ++ (desc)
 
 cmdDisplayOwners :: IRCMessage -> Net ()
 cmdDisplayOwners (IRCMessage { channel = ch }) = displayOwners ch
 
 usrIsOwner :: String -> IO Bool
-usrIsOwner usr = readIORef owners >>= \own -> return (usr `elem` own)
+usrIsOwner usr = readMVar owners >>= \own -> return (usr `elem` own)
 
 uptime :: Net String
-uptime = do
-    now  <- liftIO $ getClockTime
-    zero <- asks starttime
-    return . pretty $ diffClockTimes now zero
+uptime =
+    liftIO (getClockTime) >>= \now ->
+    asks starttime >>= \zero ->
+    (return (pretty (diffClockTimes now zero)))
 
 pretty :: TimeDiff -> String
 pretty td = join . intersperse " " . filter (not . null) . map f $
@@ -93,21 +98,21 @@ pretty td = join . intersperse " " . filter (not . null) . map f $
 formatTopic :: [String] -> String
 formatTopic t = intercalate " | " t
 
-addTopic :: String -> IORef [String] -> IO ()
-addTopic x t = do
-    top <- readIORef t
-    writeIORef t (x : top)
+addTopic :: String -> MVar [String] -> IO ()
+addTopic x t = 
+    takeMVar t >>= \top ->
+    putMVar t (x : top)
 
 
-delTopic :: IORef [String] -> IO ()
-delTopic t = do
-    top <- readIORef t
-    writeIORef t (drop 1 top)
+delTopic :: MVar [String] -> IO ()
+delTopic t =
+    takeMVar t >>= \top ->
+    putMVar t (drop 1 top)
 
-updateTopic :: IORef [String] -> Net ()
-updateTopic t = do
-    top <- liftIO $ readIORef t
-    liftIO $ putStrLn ("NewTopic: " ++ head top)
+updateTopic :: MVar [String] -> Net ()
+updateTopic t = 
+    liftIO (readMVar t) >>= \top ->
+    liftIO (putStrLn ("NewTopic: " ++ head top)) >>
     write "TOPIC" (chan ++ " :" ++ formatTopic top)
 
 numberList :: [String] -> [String]
@@ -119,8 +124,8 @@ numberList' []     n = []
 numberList' (x:xs) n = ((show n) ++ ". " ++ x) : numberList' xs (n+1)
 
 displayOwners :: String -> Net ()
-displayOwners ch = do
-    o <- liftIO $ readIORef owners
+displayOwners ch =
+    liftIO (readMVar owners) >>= \o ->
     privmsg ch ("Owners: " ++ (intercalate " " (numberList o)))
 
 
